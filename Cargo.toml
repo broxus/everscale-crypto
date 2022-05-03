@@ -2,7 +2,7 @@
 name = "everscale-crypto"
 description = "Cryptography primitives for Everscale"
 repository = "https://github.com/broxus/everscale-crypto"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 include = ["src/**/*.rs", "README.md", "LICENSE"]
 license-file = "./LICENSE"
@@ -13,4 +13,7 @@ generic-array = { version = "0.14", features = ["more_lengths"] }
 hex = "0.4.3"
 rand = "0.8.4"
 sha2 = "0.9.9"
-tl-proto = { version = "0.1.9", features = ["derive"] }
+tl-proto = { version = "0.1.9", features = ["derive"], optional = true }
+
+[features]
+default = ["tl-proto"]

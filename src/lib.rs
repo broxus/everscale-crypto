@@ -1,5 +1,6 @@
 pub mod ed25519;
 
+#[cfg(feature = "tl-proto")]
 pub mod tl {
     /// Public key which is used in protocol
     #[derive(Debug, Copy, Clone, tl_proto::TlRead, tl_proto::TlWrite)]

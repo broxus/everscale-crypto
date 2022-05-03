@@ -3,9 +3,6 @@ use curve25519_dalek_ng::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek_ng::scalar::Scalar;
 use rand::Rng;
 use sha2::{Digest, Sha512};
-use tl_proto::*;
-
-use crate::tl;
 
 /// Ed25519 key pair
 #[derive(Copy, Clone)]
@@ -23,7 +20,8 @@ impl KeyPair {
 
     /// Signs a serialized TL representation of data
     #[inline(always)]
-    pub fn sign<T: TlWrite>(&self, data: T) -> [u8; 64] {
+    #[cfg(feature = "tl-proto")]
+    pub fn sign<T: tl_proto::TlWrite>(&self, data: T) -> [u8; 64] {
         self.secret_key.sign(data, &self.public_key)
     }
 
@@ -75,16 +73,18 @@ impl PublicKey {
     }
 
     #[inline(always)]
-    pub fn from_tl(tl: tl::PublicKey<'_>) -> Option<Self> {
+    #[cfg(feature = "tl-proto")]
+    pub fn from_tl(tl: crate::tl::PublicKey<'_>) -> Option<Self> {
         match tl {
-            tl::PublicKey::Ed25519 { key } => Self::from_bytes(*key),
+            crate::tl::PublicKey::Ed25519 { key } => Self::from_bytes(*key),
             _ => None,
         }
     }
 
     #[inline(always)]
-    pub fn as_tl(&'_ self) -> tl::PublicKey<'_> {
-        tl::PublicKey::Ed25519 {
+    #[cfg(feature = "tl-proto")]
+    pub fn as_tl(&'_ self) -> crate::tl::PublicKey<'_> {
+        crate::tl::PublicKey::Ed25519 {
             key: self.0.as_bytes(),
         }
     }
@@ -103,7 +103,8 @@ impl PublicKey {
     ///
     /// NOTE: `[u8]` is representation differently in TL. Use [PublicKey::verify_raw] if
     /// you need to verify raw bytes signature
-    pub fn verify<T: TlWrite>(&self, message: T, signature: &[u8; 64]) -> bool {
+    #[cfg(feature = "tl-proto")]
+    pub fn verify<T: tl_proto::TlWrite>(&self, message: T, signature: &[u8; 64]) -> bool {
         let target_r = CompressedEdwardsY(signature[..32].try_into().unwrap());
         let s = match check_scalar(signature[32..].try_into().unwrap()) {
             Some(s) => s,
@@ -113,7 +114,7 @@ impl PublicKey {
         let mut h = Sha512::new();
         h.update(target_r.as_bytes());
         h.update(&self.0 .0);
-        HashWrapper(message).update_hasher(&mut h);
+        tl_proto::HashWrapper(message).update_hasher(&mut h);
 
         let k = Scalar::from_hash(h);
         let r = EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &self.1, &s);
@@ -201,9 +202,11 @@ impl ExpandedSecretKey {
         &self.nonce
     }
 
-    #[allow(non_snake_case)]
-    pub fn sign<T: TlWrite>(&self, message: T, public_key: &PublicKey) -> [u8; 64] {
-        let message = HashWrapper(message);
+    #[cfg(feature = "tl-proto")]
+    pub fn sign<T: tl_proto::TlWrite>(&self, message: T, public_key: &PublicKey) -> [u8; 64] {
+        #![allow(non_snake_case)]
+
+        let message = tl_proto::HashWrapper(message);
 
         let mut h = Sha512::new();
         h.update(&self.nonce);
@@ -226,8 +229,9 @@ impl ExpandedSecretKey {
         result
     }
 
-    #[allow(non_snake_case)]
     pub fn sign_raw(&self, message: &[u8], public_key: &PublicKey) -> [u8; 64] {
+        #![allow(non_snake_case)]
+
         let mut h = Sha512::new();
         h.update(&self.nonce);
         h.update(message);
