@@ -5,7 +5,7 @@ pub mod ed25519;
 #[cfg(feature = "tl-proto")]
 pub mod tl {
     /// Public key which is used in protocol
-    #[derive(Debug, Copy, Clone, tl_proto::TlRead, tl_proto::TlWrite)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, tl_proto::TlRead, tl_proto::TlWrite)]
     #[tl(boxed)]
     pub enum PublicKey<'tl> {
         #[tl(id = 0x4813b4c6, size_hint = 32)]
@@ -34,7 +34,7 @@ pub mod tl {
     }
 
     /// Public key which is used in protocol. Owned version
-    #[derive(Debug, Clone, tl_proto::TlRead, tl_proto::TlWrite)]
+    #[derive(Debug, Clone, Eq, PartialEq, tl_proto::TlRead, tl_proto::TlWrite)]
     #[tl(boxed)]
     pub enum PublicKeyOwned {
         #[tl(id = 0x4813b4c6, size_hint = 32)]
