@@ -67,6 +67,12 @@ pub mod tl {
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     pub struct Signature<'a>(pub &'a [u8; 64]);
 
+    impl Default for Signature<'_> {
+        fn default() -> Self {
+            Signature(&[0; 64])
+        }
+    }
+
     impl Signature<'_> {
         #[inline(always)]
         pub fn as_equivalent_owned(&self) -> SignatureOwned {
@@ -80,6 +86,12 @@ pub mod tl {
         #[inline(always)]
         fn deref(&self) -> &Self::Target {
             self.0
+        }
+    }
+
+    impl<'a> From<&'a [u8; 64]> for Signature<'a> {
+        fn from(value: &'a [u8; 64]) -> Self {
+            Signature(value)
         }
     }
 
@@ -113,6 +125,12 @@ pub mod tl {
     #[repr(transparent)]
     pub struct SignatureOwned(pub [u8; 64]);
 
+    impl Default for SignatureOwned {
+        fn default() -> Self {
+            SignatureOwned([0; 64])
+        }
+    }
+
     impl SignatureOwned {
         #[inline(always)]
         pub fn as_equivalent_ref(&self) -> Signature {
@@ -126,6 +144,12 @@ pub mod tl {
         #[inline(always)]
         fn deref(&self) -> &Self::Target {
             &self.0
+        }
+    }
+
+    impl From<[u8; 64]> for SignatureOwned {
+        fn from(value: [u8; 64]) -> Self {
+            SignatureOwned(value)
         }
     }
 
