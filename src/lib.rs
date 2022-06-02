@@ -65,18 +65,25 @@ pub mod tl {
     }
 
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-    #[repr(transparent)]
-    pub struct Signature(pub [u8; 64]);
+    pub struct Signature<'a>(pub &'a [u8; 64]);
 
-    impl Deref for Signature {
-        type Target = [u8; 64];
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
+    impl Signature<'_> {
+        #[inline(always)]
+        pub fn as_equivalent_owned(&self) -> SignatureOwned {
+            SignatureOwned(*self.0)
         }
     }
 
-    impl tl_proto::TlWrite for Signature {
+    impl Deref for Signature<'_> {
+        type Target = [u8; 64];
+
+        #[inline(always)]
+        fn deref(&self) -> &Self::Target {
+            self.0
+        }
+    }
+
+    impl tl_proto::TlWrite for Signature<'_> {
         type Repr = tl_proto::Bare;
 
         #[inline(always)]
@@ -90,7 +97,53 @@ pub mod tl {
         }
     }
 
-    impl<'a> tl_proto::TlRead<'a> for Signature {
+    impl<'a> tl_proto::TlRead<'a> for Signature<'a> {
+        type Repr = tl_proto::Bare;
+
+        #[inline(always)]
+        fn read_from(packet: &'a [u8], offset: &mut usize) -> tl_proto::TlResult<Self> {
+            <&'a [u8]>::read_from(packet, offset)?
+                .try_into()
+                .map(Self)
+                .map_err(|_| tl_proto::TlError::UnexpectedEof)
+        }
+    }
+
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+    #[repr(transparent)]
+    pub struct SignatureOwned(pub [u8; 64]);
+
+    impl SignatureOwned {
+        #[inline(always)]
+        pub fn as_equivalent_ref(&self) -> Signature {
+            Signature(&self.0)
+        }
+    }
+
+    impl Deref for SignatureOwned {
+        type Target = [u8; 64];
+
+        #[inline(always)]
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl tl_proto::TlWrite for SignatureOwned {
+        type Repr = tl_proto::Bare;
+
+        #[inline(always)]
+        fn max_size_hint(&self) -> usize {
+            68 // 1 byte len + 64 bytes data + 3 bytes alignment
+        }
+
+        #[inline(always)]
+        fn write_to<P: tl_proto::TlPacket>(&self, packet: &mut P) {
+            <&[u8]>::write_to(&self.0.as_slice(), packet);
+        }
+    }
+
+    impl<'a> tl_proto::TlRead<'a> for SignatureOwned {
         type Repr = tl_proto::Bare;
 
         #[inline(always)]
