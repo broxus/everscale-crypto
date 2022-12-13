@@ -1,6 +1,6 @@
-use curve25519_dalek_ng::constants::ED25519_BASEPOINT_TABLE;
-use curve25519_dalek_ng::edwards::{CompressedEdwardsY, EdwardsPoint};
-use curve25519_dalek_ng::scalar::Scalar;
+use curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
+use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
+use curve25519_dalek::scalar::Scalar;
 use rand::Rng;
 use sha2::{Digest, Sha512};
 
@@ -113,10 +113,10 @@ impl PublicKey {
 
         let mut h = Sha512::new();
         h.update(target_r.as_bytes());
-        h.update(&self.0 .0);
+        h.update(self.0 .0.as_slice());
         tl_proto::HashWrapper(message).update_hasher(&mut h);
 
-        let k = Scalar::from_hash(h);
+        let k = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
         let r = EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &self.1, &s);
 
         r.compress() == target_r
@@ -132,10 +132,10 @@ impl PublicKey {
 
         let mut h = Sha512::new();
         h.update(target_r.as_bytes());
-        h.update(&self.0 .0);
+        h.update(self.0 .0.as_slice());
         h.update(message);
 
-        let k = Scalar::from_hash(h);
+        let k = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
         let r = EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &self.1, &s);
 
         r.compress() == target_r
@@ -152,7 +152,7 @@ impl PublicKey {
 impl From<&'_ SecretKey> for PublicKey {
     fn from(secret_key: &SecretKey) -> Self {
         let mut h = Sha512::new();
-        h.update(&secret_key.0);
+        h.update(secret_key.0.as_slice());
         let hash: [u8; 64] = h.finalize().into();
         Self::from_scalar(hash[..32].try_into().unwrap())
     }
@@ -182,7 +182,7 @@ impl Eq for PublicKey {}
 impl std::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut output = [0u8; 64];
-        hex::encode_to_slice(&self.0 .0, &mut output).ok();
+        hex::encode_to_slice(self.0 .0.as_slice(), &mut output).ok();
 
         // SAFETY: output is guaranteed to contain only [0-9a-f]
         let output = unsafe { std::str::from_utf8_unchecked(&output) };
@@ -209,10 +209,10 @@ impl ExpandedSecretKey {
         let message = tl_proto::HashWrapper(message);
 
         let mut h = Sha512::new();
-        h.update(&self.nonce);
+        h.update(self.nonce.as_slice());
         message.update_hasher(&mut h);
 
-        let r = Scalar::from_hash(h);
+        let r = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
         let R = (&r * &ED25519_BASEPOINT_TABLE).compress();
 
         h = Sha512::new();
@@ -220,7 +220,7 @@ impl ExpandedSecretKey {
         h.update(public_key.as_bytes());
         message.update_hasher(&mut h);
 
-        let k = Scalar::from_hash(h);
+        let k = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
         let s = (k * self.key) + r;
 
         let mut result = [0u8; 64];
@@ -233,10 +233,10 @@ impl ExpandedSecretKey {
         #![allow(non_snake_case)]
 
         let mut h = Sha512::new();
-        h.update(&self.nonce);
+        h.update(self.nonce.as_slice());
         h.update(message);
 
-        let r = Scalar::from_hash(h);
+        let r = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
         let R = (&r * &ED25519_BASEPOINT_TABLE).compress();
 
         h = Sha512::new();
@@ -244,7 +244,7 @@ impl ExpandedSecretKey {
         h.update(public_key.as_bytes());
         h.update(message);
 
-        let k = Scalar::from_hash(h);
+        let k = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
         let s = (k * self.key) + r;
 
         let mut result = [0u8; 64];
@@ -263,7 +263,7 @@ impl ExpandedSecretKey {
 impl From<&'_ SecretKey> for ExpandedSecretKey {
     fn from(secret_key: &SecretKey) -> Self {
         let mut h = Sha512::new();
-        h.update(&secret_key.0);
+        h.update(secret_key.0.as_slice());
         let hash: [u8; 64] = h.finalize().into();
 
         let mut lower: [u8; 32] = hash[..32].try_into().unwrap();
@@ -322,7 +322,7 @@ fn check_scalar(bytes: [u8; 32]) -> Option<Scalar> {
     if bytes[31] & 0xf0 == 0 {
         Some(Scalar::from_bits(bytes))
     } else {
-        Scalar::from_canonical_bytes(bytes)
+        Scalar::from_canonical_bytes(bytes).into()
     }
 }
 
@@ -377,7 +377,7 @@ mod tests {
         let extended = ExpandedSecretKey::from(&first);
         let signature = extended.sign(data, &first_pubkey);
 
-        assert!(!second_pubkey.verify(&data, &signature))
+        assert!(!second_pubkey.verify(data, &signature))
     }
 
     #[test]
