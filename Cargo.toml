@@ -2,13 +2,13 @@
 name = "everscale-crypto"
 description = "Cryptography primitives for Everscale"
 repository = "https://github.com/broxus/everscale-crypto"
-version = "0.2.0-pre.0"
+version = "0.2.0-pre.1"
 edition = "2021"
 include = ["src/**/*.rs", "README.md", "LICENSE"]
 license-file = "./LICENSE"
 
 [dependencies]
-curve25519-dalek = "4.0.0-pre.3"
+curve25519-dalek = "4.0.0-rc.1"
 generic-array = { version = "0.14", features = ["more_lengths"] }
 hex = "0.4.3"
 rand = "0.8.4"

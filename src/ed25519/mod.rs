@@ -143,7 +143,7 @@ impl PublicKey {
 
     #[inline(always)]
     fn from_scalar(bits: [u8; 32]) -> PublicKey {
-        let point = &clamp_scalar(bits) * &ED25519_BASEPOINT_TABLE;
+        let point = &clamp_scalar(bits) * ED25519_BASEPOINT_TABLE;
         let compressed = point.compress();
         Self(compressed, -point)
     }
@@ -213,7 +213,7 @@ impl ExpandedSecretKey {
         message.update_hasher(&mut h);
 
         let r = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
-        let R = (&r * &ED25519_BASEPOINT_TABLE).compress();
+        let R = (&r * ED25519_BASEPOINT_TABLE).compress();
 
         h = Sha512::new();
         h.update(R.as_bytes());
@@ -237,7 +237,7 @@ impl ExpandedSecretKey {
         h.update(message);
 
         let r = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
-        let R = (&r * &ED25519_BASEPOINT_TABLE).compress();
+        let R = (&r * ED25519_BASEPOINT_TABLE).compress();
 
         h = Sha512::new();
         h.update(R.as_bytes());
@@ -345,7 +345,7 @@ mod tests {
                 114, 76, 87, 204, 218, 132, 26, 196, 181, 191, 188, 115, 123
             ]
         );
-        println!("{:?}", pubkey);
+        println!("{pubkey:?}");
 
         let data = b"hello world";
 
