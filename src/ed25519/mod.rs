@@ -1,4 +1,3 @@
-use curve25519_dalek::constants::ED25519_BASEPOINT_TABLE;
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
 use rand::Rng;
@@ -61,7 +60,10 @@ impl From<&'_ SecretKey> for KeyPair {
 
 /// Ed25519 public key
 #[derive(Copy, Clone)]
-pub struct PublicKey(CompressedEdwardsY, EdwardsPoint);
+pub struct PublicKey {
+    compressed: CompressedEdwardsY,
+    neg_point: EdwardsPoint,
+}
 
 impl PublicKey {
     /// Tries to create public key from
@@ -69,7 +71,10 @@ impl PublicKey {
     pub fn from_bytes(bytes: [u8; 32]) -> Option<Self> {
         let compressed = CompressedEdwardsY(bytes);
         let point = compressed.decompress()?;
-        Some(PublicKey(compressed, -point))
+        Some(PublicKey {
+            compressed,
+            neg_point: -point,
+        })
     }
 
     #[inline(always)]
@@ -85,18 +90,18 @@ impl PublicKey {
     #[cfg(feature = "tl-proto")]
     pub fn as_tl(&'_ self) -> crate::tl::PublicKey<'_> {
         crate::tl::PublicKey::Ed25519 {
-            key: self.0.as_bytes(),
+            key: self.compressed.as_bytes(),
         }
     }
 
     #[inline(always)]
     pub fn to_bytes(&self) -> [u8; 32] {
-        self.0 .0
+        self.compressed.to_bytes()
     }
 
     #[inline(always)]
     pub fn as_bytes(&'_ self) -> &'_ [u8; 32] {
-        &self.0 .0
+        self.compressed.as_bytes()
     }
 
     /// Verifies message signature using its TL representation
@@ -113,11 +118,11 @@ impl PublicKey {
 
         let mut h = Sha512::new();
         h.update(target_r.as_bytes());
-        h.update(self.0 .0.as_slice());
+        h.update(self.compressed.as_bytes());
         tl_proto::HashWrapper(message).update_hasher(&mut h);
 
         let k = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
-        let r = EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &self.1, &s);
+        let r = EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &self.neg_point, &s);
 
         r.compress() == target_r
     }
@@ -132,20 +137,23 @@ impl PublicKey {
 
         let mut h = Sha512::new();
         h.update(target_r.as_bytes());
-        h.update(self.0 .0.as_slice());
+        h.update(self.compressed.as_bytes());
         h.update(message);
 
         let k = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
-        let r = EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &self.1, &s);
+        let r = EdwardsPoint::vartime_double_scalar_mul_basepoint(&k, &self.neg_point, &s);
 
         r.compress() == target_r
     }
 
     #[inline(always)]
     fn from_scalar(bits: [u8; 32]) -> PublicKey {
-        let point = &clamp_scalar(bits) * ED25519_BASEPOINT_TABLE;
+        let point = EdwardsPoint::mul_base_clamped(bits);
         let compressed = point.compress();
-        Self(compressed, -point)
+        Self {
+            compressed,
+            neg_point: -point,
+        }
     }
 }
 
@@ -160,7 +168,7 @@ impl From<&'_ SecretKey> for PublicKey {
 
 impl From<&'_ ExpandedSecretKey> for PublicKey {
     fn from(expanded_secret_key: &ExpandedSecretKey) -> Self {
-        Self::from_scalar(expanded_secret_key.key.to_bytes())
+        Self::from_scalar(expanded_secret_key.key_bytes)
     }
 }
 
@@ -173,7 +181,7 @@ impl AsRef<[u8; 32]> for PublicKey {
 impl PartialEq for PublicKey {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        self.0 .0.eq(&other.0 .0)
+        self.compressed.eq(&other.compressed)
     }
 }
 
@@ -182,7 +190,7 @@ impl Eq for PublicKey {}
 impl std::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut output = [0u8; 64];
-        hex::encode_to_slice(self.0 .0.as_slice(), &mut output).ok();
+        hex::encode_to_slice(self.compressed.as_bytes(), &mut output).ok();
 
         // SAFETY: output is guaranteed to contain only [0-9a-f]
         let output = unsafe { std::str::from_utf8_unchecked(&output) };
@@ -193,6 +201,7 @@ impl std::fmt::Debug for PublicKey {
 #[derive(Copy, Clone)]
 pub struct ExpandedSecretKey {
     key: Scalar,
+    key_bytes: [u8; 32],
     nonce: [u8; 32],
 }
 
@@ -213,7 +222,7 @@ impl ExpandedSecretKey {
         message.update_hasher(&mut h);
 
         let r = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
-        let R = (&r * ED25519_BASEPOINT_TABLE).compress();
+        let R = EdwardsPoint::mul_base(&r).compress();
 
         h = Sha512::new();
         h.update(R.as_bytes());
@@ -237,7 +246,7 @@ impl ExpandedSecretKey {
         h.update(message);
 
         let r = Scalar::from_bytes_mod_order_wide(&h.finalize().into());
-        let R = (&r * ED25519_BASEPOINT_TABLE).compress();
+        let R = EdwardsPoint::mul_base(&r).compress();
 
         h = Sha512::new();
         h.update(R.as_bytes());
@@ -255,8 +264,8 @@ impl ExpandedSecretKey {
 
     #[inline(always)]
     pub fn compute_shared_secret(&self, other_public_key: &PublicKey) -> [u8; 32] {
-        let point = (-other_public_key.1).to_montgomery();
-        (clamp_scalar(self.key.to_bytes()) * point).to_bytes()
+        let point = (-other_public_key.neg_point).to_montgomery();
+        (point * self.key).to_bytes()
     }
 }
 
@@ -266,15 +275,14 @@ impl From<&'_ SecretKey> for ExpandedSecretKey {
         h.update(secret_key.0.as_slice());
         let hash: [u8; 64] = h.finalize().into();
 
-        let mut lower: [u8; 32] = hash[..32].try_into().unwrap();
+        let lower: [u8; 32] = hash[..32].try_into().unwrap();
         let nonce: [u8; 32] = hash[32..].try_into().unwrap();
 
-        lower[0] &= 248;
-        lower[31] &= 63;
-        lower[31] |= 64;
+        let key_bytes = curve25519_dalek::scalar::clamp_integer(lower);
 
         Self {
-            key: Scalar::from_bits(lower),
+            key: Scalar::from_bytes_mod_order(key_bytes),
+            key_bytes,
             nonce,
         }
     }
@@ -310,20 +318,8 @@ impl SecretKey {
 }
 
 #[inline(always)]
-fn clamp_scalar(mut bits: [u8; 32]) -> Scalar {
-    bits[0] &= 248;
-    bits[31] &= 127;
-    bits[31] |= 64;
-    Scalar::from_bits(bits)
-}
-
-#[inline(always)]
 fn check_scalar(bytes: [u8; 32]) -> Option<Scalar> {
-    if bytes[31] & 0xf0 == 0 {
-        Some(Scalar::from_bits(bytes))
-    } else {
-        Scalar::from_canonical_bytes(bytes).into()
-    }
+    Scalar::from_canonical_bytes(bytes).into()
 }
 
 #[cfg(test)]
@@ -392,5 +388,14 @@ mod tests {
         let second_shared_key = second.compute_shared_secret(&first_pubkey);
 
         assert_eq!(first_shared_key, second_shared_key);
+    }
+
+    #[test]
+    fn shared_secret_on_self() {
+        let secret = SecretKey::generate(&mut rand::thread_rng());
+        let pubkey = PublicKey::from(&secret);
+
+        let shared = ExpandedSecretKey::from(&secret).compute_shared_secret(&pubkey);
+        assert_ne!(secret.as_bytes(), &shared);
     }
 }

@@ -8,7 +8,7 @@ include = ["src/**/*.rs", "README.md", "LICENSE"]
 license-file = "./LICENSE"
 
 [dependencies]
-curve25519-dalek = "4.0.0-rc.1"
+curve25519-dalek = "4.0.0-rc.2"
 generic-array = { version = "0.14", features = ["more_lengths"] }
 hex = "0.4.3"
 rand = "0.8.4"
@@ -17,3 +17,6 @@ tl-proto = { version = "0.4.0", features = ["derive"], optional = true }
 
 [features]
 default = ["tl-proto"]
+
+[patch.crates-io]
+curve25519-dalek = { git = "https://github.com/dalek-cryptography/curve25519-dalek.git" }
