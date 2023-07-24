@@ -377,6 +377,33 @@ mod tests {
     }
 
     #[test]
+    fn correct_shared_secret() {
+        let first = ExpandedSecretKey::from(&SecretKey::from_bytes([
+            215, 30, 117, 171, 183, 9, 171, 48, 212, 45, 10, 198, 14, 66, 109, 80, 163, 180, 194,
+            66, 82, 184, 13, 48, 240, 102, 40, 110, 156, 5, 13, 143,
+        ]));
+        let first_pubkey = PublicKey::from(&first);
+
+        let second = ExpandedSecretKey::from(&SecretKey::from_bytes([
+            181, 115, 13, 55, 26, 150, 138, 43, 66, 28, 162, 50, 0, 133, 120, 24, 20, 142, 183, 60,
+            159, 53, 200, 97, 14, 123, 63, 249, 222, 211, 186, 99,
+        ]));
+        let second_pubkey = PublicKey::from(&second);
+
+        let first_shared_key = first.compute_shared_secret(&second_pubkey);
+        let second_shared_key = second.compute_shared_secret(&first_pubkey);
+
+        assert_eq!(
+            first_shared_key,
+            [
+                30, 243, 238, 65, 216, 53, 237, 172, 6, 120, 204, 220, 34, 163, 18, 28, 181, 245,
+                215, 233, 98, 0, 87, 11, 85, 6, 41, 130, 140, 95, 66, 72
+            ]
+        );
+        assert_eq!(first_shared_key, second_shared_key);
+    }
+
+    #[test]
     fn same_shared_secret() {
         let first = ExpandedSecretKey::from(&SecretKey::generate(&mut rand::thread_rng()));
         let first_pubkey = PublicKey::from(&first);
