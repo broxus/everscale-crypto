@@ -187,7 +187,7 @@ impl PartialEq for PublicKey {
 
 impl Eq for PublicKey {}
 
-impl std::fmt::Debug for PublicKey {
+impl std::fmt::Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut output = [0u8; 64];
         hex::encode_to_slice(self.compressed.as_bytes(), &mut output).ok();
@@ -195,6 +195,66 @@ impl std::fmt::Debug for PublicKey {
         // SAFETY: output is guaranteed to contain only [0-9a-f]
         let output = unsafe { std::str::from_utf8_unchecked(&output) };
         f.write_str(output)
+    }
+}
+
+impl std::fmt::Debug for PublicKey {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.collect_str(self)
+        } else {
+            self.as_bytes().serialize(serializer)
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{Error, Visitor};
+
+        struct BytesVisitor;
+
+        impl<'de> Visitor<'de> for BytesVisitor {
+            type Value = [u8; 32];
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("hex-encoded public key")
+            }
+
+            fn visit_str<E: Error>(self, value: &str) -> Result<Self::Value, E> {
+                let mut result = [0; 32];
+                match hex::decode_to_slice(value, &mut result) {
+                    Ok(()) => Ok(result),
+                    Err(_) => Err(Error::invalid_value(
+                        serde::de::Unexpected::Str(value),
+                        &self,
+                    )),
+                }
+            }
+        }
+
+        let bytes = if deserializer.is_human_readable() {
+            deserializer.deserialize_str(BytesVisitor)
+        } else {
+            <[u8; 32]>::deserialize(deserializer)
+        }?;
+
+        Self::from_bytes(bytes).ok_or_else(|| Error::custom("invalid public key"))
     }
 }
 
