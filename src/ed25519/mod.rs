@@ -37,6 +37,18 @@ impl KeyPair {
     }
 }
 
+impl rand::distributions::Distribution<KeyPair> for rand::distributions::Standard {
+    #[inline]
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> KeyPair {
+        let secret_key = rng.gen::<SecretKey>();
+
+        KeyPair {
+            secret_key: ExpandedSecretKey::from(&secret_key),
+            public_key: PublicKey::from(&secret_key),
+        }
+    }
+}
+
 impl From<ExpandedSecretKey> for KeyPair {
     fn from(secret_key: ExpandedSecretKey) -> Self {
         let public_key = PublicKey::from(&secret_key);
@@ -374,6 +386,13 @@ impl SecretKey {
     #[inline(always)]
     pub fn expand(&self) -> ExpandedSecretKey {
         ExpandedSecretKey::from(self)
+    }
+}
+
+impl rand::distributions::Distribution<SecretKey> for rand::distributions::Standard {
+    #[inline]
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
+        SecretKey(rng.gen())
     }
 }
 
