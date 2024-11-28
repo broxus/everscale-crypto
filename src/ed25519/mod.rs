@@ -241,7 +241,7 @@ impl<'de> serde::Deserialize<'de> for PublicKey {
 
         struct BytesVisitor;
 
-        impl<'de> Visitor<'de> for BytesVisitor {
+        impl Visitor<'_> for BytesVisitor {
             type Value = [u8; 32];
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
