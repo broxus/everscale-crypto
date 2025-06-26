@@ -1,13 +1,11 @@
-## tycho-crypto &emsp; [![Latest Version]][crates.io] [![tycho-crypto: rustc 1.56+]][Rust 1.56] [![Workflow badge]][Workflow] [![License MIT badge]][License MIT]
+## tycho-crypto &emsp; [![Latest Version]][crates.io] [![tycho-crypto: rustc 1.85+]][Rust 1.85] [![Workflow badge]][Workflow]
 
 [Latest Version]: https://img.shields.io/crates/v/tycho-crypto.svg
 [crates.io]: https://crates.io/crates/tycho-crypto
-[tycho-crypto: rustc 1.56+]: https://img.shields.io/badge/rustc-1.56+-lightgray.svg
-[Rust 1.56]: https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html
+[tycho-crypto: rustc 1.85+]: https://img.shields.io/badge/rustc-1.85+-lightgray.svg
+[Rust 1.85]: https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/
 [Workflow badge]: https://img.shields.io/github/actions/workflow/status/broxus/tycho-crypto/master.yml?branch=master
 [Workflow]: https://github.com/broxus/tycho-crypto/actions?query=workflow%3Amaster
-[License MIT badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[License MIT]: https://opensource.org/licenses/MIT
 
 Cryptography primitives for Tycho
 
