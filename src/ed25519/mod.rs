@@ -1,6 +1,5 @@
 use curve25519_dalek::edwards::{CompressedEdwardsY, EdwardsPoint};
 use curve25519_dalek::scalar::Scalar;
-use rand::Rng;
 use sha2::{Digest, Sha512};
 
 /// Ed25519 key pair
@@ -11,17 +10,11 @@ pub struct KeyPair {
 }
 
 impl KeyPair {
-    /// Generates new Ed25519 key pair
-    #[inline(always)]
-    pub fn generate(rng: &mut impl Rng) -> Self {
-        Self::from(&SecretKey::generate(rng))
-    }
-
     /// Signs a serialized TL representation of data
     #[inline(always)]
     #[cfg(feature = "tl-proto")]
-    pub fn sign<T: tl_proto::TlWrite>(&self, data: T) -> [u8; 64] {
-        self.secret_key.sign(data, &self.public_key)
+    pub fn sign_tl<T: tl_proto::TlWrite>(&self, data: T) -> [u8; 64] {
+        self.secret_key.sign_tl(data, &self.public_key)
     }
 
     /// Signs raw bytes
@@ -37,10 +30,23 @@ impl KeyPair {
     }
 }
 
-impl rand::distributions::Distribution<KeyPair> for rand::distributions::Standard {
+#[cfg(feature = "rand8")]
+impl rand8::distributions::Distribution<KeyPair> for rand8::distributions::Standard {
     #[inline]
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> KeyPair {
-        let secret_key = rng.gen::<SecretKey>();
+    fn sample<R: rand8::Rng + ?Sized>(&self, rng: &mut R) -> KeyPair {
+        let secret_key = rng.r#gen::<SecretKey>();
+
+        KeyPair {
+            secret_key: ExpandedSecretKey::from(&secret_key),
+            public_key: PublicKey::from(&secret_key),
+        }
+    }
+}
+
+#[cfg(feature = "rand9")]
+impl rand9::distr::Distribution<KeyPair> for rand9::distr::StandardUniform {
+    fn sample<R: rand9::Rng + ?Sized>(&self, rng: &mut R) -> KeyPair {
+        let secret_key = rng.random::<SecretKey>();
 
         KeyPair {
             secret_key: ExpandedSecretKey::from(&secret_key),
@@ -121,7 +127,7 @@ impl PublicKey {
     /// NOTE: `[u8]` is representation differently in TL. Use [PublicKey::verify_raw] if
     /// you need to verify raw bytes signature
     #[cfg(feature = "tl-proto")]
-    pub fn verify<T: tl_proto::TlWrite>(&self, message: T, signature: &[u8; 64]) -> bool {
+    pub fn verify_tl<T: tl_proto::TlWrite>(&self, message: T, signature: &[u8; 64]) -> bool {
         let target_r = CompressedEdwardsY(signature[..32].try_into().unwrap());
         let s = match check_scalar(signature[32..].try_into().unwrap()) {
             Some(s) => s,
@@ -284,7 +290,7 @@ impl ExpandedSecretKey {
     }
 
     #[cfg(feature = "tl-proto")]
-    pub fn sign<T: tl_proto::TlWrite>(&self, message: T, public_key: &PublicKey) -> [u8; 64] {
+    pub fn sign_tl<T: tl_proto::TlWrite>(&self, message: T, public_key: &PublicKey) -> [u8; 64] {
         #![allow(non_snake_case)]
 
         let message = tl_proto::HashWrapper(message);
@@ -379,20 +385,25 @@ impl SecretKey {
         &self.0
     }
 
-    pub fn generate(rng: &mut impl Rng) -> Self {
-        Self(rng.gen())
-    }
-
     #[inline(always)]
     pub fn expand(&self) -> ExpandedSecretKey {
         ExpandedSecretKey::from(self)
     }
 }
 
-impl rand::distributions::Distribution<SecretKey> for rand::distributions::Standard {
+#[cfg(feature = "rand8")]
+impl rand8::distributions::Distribution<SecretKey> for rand8::distributions::Standard {
     #[inline]
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
-        SecretKey(rng.gen())
+    fn sample<R: rand8::Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
+        SecretKey(rng.r#gen())
+    }
+}
+
+#[cfg(feature = "rand9")]
+impl rand9::distr::Distribution<SecretKey> for rand9::distr::StandardUniform {
+    #[inline]
+    fn sample<R: rand9::Rng + ?Sized>(&self, rng: &mut R) -> SecretKey {
+        SecretKey(rng.random())
     }
 }
 
@@ -425,7 +436,7 @@ mod tests {
         let data = b"hello world";
 
         let extended = ExpandedSecretKey::from(&secret);
-        let signature = extended.sign(data, &pubkey);
+        let signature = extended.sign_tl(data, &pubkey);
         assert_eq!(
             signature,
             [
@@ -436,23 +447,23 @@ mod tests {
             ]
         );
 
-        assert!(pubkey.verify(data, &signature))
+        assert!(pubkey.verify_tl(data, &signature))
     }
 
     #[test]
     fn verify_with_different_key() {
-        let first = SecretKey::generate(&mut rand::thread_rng());
+        let first = rand9::random::<SecretKey>();
         let first_pubkey = PublicKey::from(&first);
 
-        let second = SecretKey::generate(&mut rand::thread_rng());
+        let second = rand9::random::<SecretKey>();
         let second_pubkey = PublicKey::from(&second);
 
         let data = b"hello world";
 
         let extended = ExpandedSecretKey::from(&first);
-        let signature = extended.sign(data, &first_pubkey);
+        let signature = extended.sign_tl(data, &first_pubkey);
 
-        assert!(!second_pubkey.verify(data, &signature))
+        assert!(!second_pubkey.verify_tl(data, &signature))
     }
 
     #[test]
@@ -484,10 +495,10 @@ mod tests {
 
     #[test]
     fn same_shared_secret() {
-        let first = ExpandedSecretKey::from(&SecretKey::generate(&mut rand::thread_rng()));
+        let first = ExpandedSecretKey::from(&rand9::random::<SecretKey>());
         let first_pubkey = PublicKey::from(&first);
 
-        let second = ExpandedSecretKey::from(&SecretKey::generate(&mut rand::thread_rng()));
+        let second = ExpandedSecretKey::from(&rand9::random::<SecretKey>());
         let second_pubkey = PublicKey::from(&second);
 
         let first_shared_key = first.compute_shared_secret(&second_pubkey);
@@ -498,7 +509,7 @@ mod tests {
 
     #[test]
     fn shared_secret_on_self() {
-        let secret = SecretKey::generate(&mut rand::thread_rng());
+        let secret = rand9::random::<SecretKey>();
         let pubkey = PublicKey::from(&secret);
 
         let shared = ExpandedSecretKey::from(&secret).compute_shared_secret(&pubkey);
